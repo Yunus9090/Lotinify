@@ -5,6 +5,7 @@ import logging
 import io
 import re
 from typing import Tuple, Union, Any
+import os # <-- os modulini qo'shdik (GEMINI_API_KEY ni o'qish uchun)
 
 # Aiogram kutubxonalari
 from aiogram import Bot, Dispatcher, types, F, Router
@@ -46,10 +47,11 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# !!! YANGILANGAN BOT TOKENDAN FOYDALANILMOQDA !!!
-TOKEN = "8420487214:AAFgPefTZNiF843hOZjYb_-3J_6V6SuYzmY" 
+# !!! BOT TOKENI VA API KALITLARI TIZIM O'ZGARUVCHISIDAN O'QILADI (XAVFSIZLIK UCHUN) !!!
+TOKEN = "8420487214:AAFgPefTZNiF843hOZjYb_-3J_6V6SuYzmY"  # Bot tokeni
 ADMIN_ID = 1455902088 
-GEMINI_API_KEY = "AIzaSyBh74Q6js175gbAZ3muhphrmjfO-KOB8qU" 
+# API kalitini tizim o'zgaruvchisidan (Railway Variables) o'qish:
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") # <--- O'ZGARTIRILGAN QISM!!!
 
 MAX_FILE_SIZE_MB = 50
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
@@ -167,14 +169,14 @@ def uz_to_cyrillic(text: str) -> str:
             continue
             
         if current_part.startswith('ts'):
-             is_at_start_of_word = (i == 0 or not text[i-1].isalpha())
-             
-             if is_at_start_of_word:
-                 result.append('Ц' if is_upper else 'ц')
-                 i += 2
-                 continue
-             else:
-                 pass
+              is_at_start_of_word = (i == 0 or not text[i-1].isalpha())
+              
+              if is_at_start_of_word:
+                  result.append('Ц' if is_upper else 'ц')
+                  i += 2
+                  continue
+              else:
+                  pass
 
         if current_char_lower == 'y' and i + 1 < len(text) and text[i+1].lower() in ('a', 'o', 'u', 'e'):
             next_char = text[i+1].lower()
@@ -300,17 +302,17 @@ async def gemini_process_text(text: str, task_type: str) -> str:
 # --- Fayl konvertatsiya mantig'i ---
 async def convert_office_file_from_bytes(file_bytes: io.BytesIO, filename: str) -> Union[Tuple[io.BytesIO, str], str]:
     if not (Document and load_workbook and Presentation):
-         return "❌ Office fayllar bilan ishlash kutubxonalari o'rnatilmagan."
-         
+          return "❌ Office fayllar bilan ishlash kutubxonalari o'rnatilmagan."
+          
     ext = filename.lower().split('.')[-1]
     file_bytes.seek(0)
     
     if 'kirill' in filename.lower():
-          new_filename = filename.replace('kirill', 'lotin')
+           new_filename = filename.replace('kirill', 'lotin')
     elif 'lotin' in filename.lower():
-          new_filename = filename.replace('lotin', 'kirill')
+           new_filename = filename.replace('lotin', 'kirill')
     else:
-          new_filename = f"converted_{filename}"
+           new_filename = f"converted_{filename}"
 
     try:
         if ext == 'docx':
@@ -318,8 +320,8 @@ async def convert_office_file_from_bytes(file_bytes: io.BytesIO, filename: str) 
             paragraphs = list(doc.paragraphs)
             for table in doc.tables:
                  for row in table.rows:
-                     for cell in row.cells:
-                         paragraphs.extend(cell.paragraphs)
+                      for cell in row.cells:
+                          paragraphs.extend(cell.paragraphs)
             
             sample = "\n".join(p.text for p in paragraphs if p.text)
             script = detect_script(sample)
@@ -395,9 +397,9 @@ async def convert_office_file_from_bytes(file_bytes: io.BytesIO, filename: str) 
             prs.save(out)
             out.seek(0)
             return out, new_filename
-        
+            
         else:
-             return f"Bot faqat **.docx, .xlsx, .pptx** formatlarini qo'llab-quvvatlaydi."
+              return f"Bot faqat **.docx, .xlsx, .pptx** formatlarini qo'llab-quvvatlaydi."
     
     except Exception as e:
         logger.exception(f"Office conversion failed for .{ext}")
@@ -441,7 +443,7 @@ async def process_file_logic(msg: types.Message, state: FSMContext, expected_ext
     except Exception as e:
         logger.exception(f"process_file_logic failed during download/send: {e}")
         await msg.answer(f"❌ Yuklab olish yoki yuborishda umumiy xatolik. Iltimos, yana urinib ko'ring.",
-                         reply_markup=MAIN_MENU, parse_mode=ParseMode.MARKDOWN)
+                             reply_markup=MAIN_MENU, parse_mode=ParseMode.MARKDOWN)
     finally:
         await state.clear()
 
@@ -476,9 +478,9 @@ async def spellcheck_entry(msg: types.Message, state: FSMContext):
 @router.message(F.text == "📁 Fayl Konvertatsiyasi")
 async def file_translit_entry(msg: types.Message, state: FSMContext):
     if not (Document and load_workbook and Presentation):
-         await msg.answer("❌ Fayl kutubxonalari o'rnatilmagan. Fayl konvertatsiyasi ISHLAMAYDI.", reply_markup=MAIN_MENU)
-         return
-         
+           await msg.answer("❌ Fayl kutubxonalari o'rnatilmagan. Fayl konvertatsiyasi ISHLAMAYDI.", reply_markup=MAIN_MENU)
+           return
+           
     await state.set_state(TranslitState.waiting_for_menu)
     await msg.answer(f"Konvertatsiya turini tanlang. (Maksimal fayl hajmi: {MAX_FILE_SIZE_MB} MB)", reply_markup=FILE_MENU)
 
@@ -609,12 +611,12 @@ async def inline_translit_handler(inline_query: InlineQuery):
         if not text_to_convert:
             results.append(
                  InlineQueryResultArticle(
-                    id="enter_text",
-                    title="Matnni kiriting...",
-                    input_message_content=InputTextMessageContent(
-                        message_text="Matn kiritilmadi. Lotin yoki Kirill matnini yozing."
-                    )
-                )
+                     id="enter_text",
+                     title="Matnni kiriting...",
+                     input_message_content=InputTextMessageContent(
+                         message_text="Matn kiritilmadi. Lotin yoki Kirill matnini yozing."
+                     )
+                 )
             )
         elif command == "lotin":
             converted_text = uz_to_latin(text_to_convert)
@@ -670,14 +672,14 @@ async def inline_translit_handler(inline_query: InlineQuery):
                 )
             else:
                  results.append(
-                    InlineQueryResultArticle(
-                        id="unknown_auto",
-                        title="Alifbo aniqlanmadi (Kirill yoki Lotin deb yozing)",
-                        input_message_content=InputTextMessageContent(
-                            message_text=f"Alifbo aniqlanmadi: {query_text}"
-                        )
-                    )
-                )
+                     InlineQueryResultArticle(
+                         id="unknown_auto",
+                         title="Alifbo aniqlanmadi (Kirill yoki Lotin deb yozing)",
+                         input_message_content=InputTextMessageContent(
+                             message_text=f"Alifbo aniqlanmadi: {query_text}"
+                         )
+                     )
+                 )
                 
     await bot.answer_inline_query(inline_query.id, results, cache_time=5)
 
