@@ -1,4 +1,4 @@
-# bot.py - Lotinify Telegram Boti (YAKUNIY BARQAROR VA INLINE VERSIYA)
+﻿# bot.py - Lotinify Telegram Boti (YAKUNIY BARQAROR VA INLINE VERSIYA)
 
 import asyncio
 import logging
