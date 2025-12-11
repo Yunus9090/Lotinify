@@ -5,6 +5,7 @@ import logging
 import io
 import re
 from typing import Tuple, Union, Any
+import os 
 
 # Aiogram kutubxonalari
 from aiogram import Bot, Dispatcher, types, F, Router
@@ -46,10 +47,11 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# !!! YANGILANGAN BOT TOKENDAN FOYDALANILMOQDA !!!
-TOKEN = "8420487214:AAFgPefTZNiF843hOZjYb_-3J_6V6SuYzmY" 
+# !!! BOT TOKENI VA API KALITLARI TIZIM O'ZGARUVCHISIDAN O'QILADI (XAVFSIZLIK UCHUN) !!!
+TOKEN = "8420487214:AAFgPefTZNiF843hOZjYb_-3J_6V6SuYzmY"  # Bot tokeni
 ADMIN_ID = 1455902088 
-GEMINI_API_KEY = "AIzaSyDRzS2zQ2UmZd32gUGmZi9bAfk89OQfiIU" 
+# API kalitini tizim o'zgaruvchisidan (Railway Variables) o'qish:
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
 
 MAX_FILE_SIZE_MB = 50
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
@@ -96,6 +98,7 @@ FILE_MENU = ReplyKeyboardMarkup(keyboard=[
 # ==========================================================
 
 def normalize_apostrophes(text: str) -> str:
+    # Barcha turdagi apostroflarni (shu jumladan Makron/Unicode 'ʻ' va 'ʼ' ni) bitta ASCII apostrofga ('') o'tkazish
     bad_apos = ["“", "”", "‘", "’", "ʻ", "ʼ", "`", "´", "ʹ", "ʾ", "ˈ", "ʽ"]
     for b in bad_apos:
         text = text.replace(b, "'")
@@ -130,10 +133,12 @@ def uz_to_cyrillic(text: str) -> str:
     result = []
     i = 0
     
+    # Lotin harflarining oddiy Kirillcha ekvivalentlari
     CYR_MAP = {
         'a': 'а', 'b': 'б', 'v': 'в', 'g': 'г', 'd': 'д', 'z': 'з', 'i': 'и', 'y': 'й', 'k': 'к', 'l': 'л',
         'm': 'м', 'n': 'н', 'o': 'о', 'p': 'п', 'r': 'р', 's': 'с', 't': 'т', 'u': 'у', 'f': 'ф',
-        'x': 'х', 'h': 'ҳ', 'q': 'қ', 'j': 'ж', "'": 'ъ'
+        'x': 'х', 'h': 'ҳ', 'q': 'қ', 'j': 'ж', 
+        "'": 'ъ' # Apostrofni 'ъ' ga o'tkazish (Kirillcha xato shu yerda to'g'irlandi)
     }
 
     while i < len(text):
@@ -145,6 +150,7 @@ def uz_to_cyrillic(text: str) -> str:
 
         found = False
         
+        # Qo'shma harflarni o'tkazish
         compound_map = {
             'oʻ': 'ў', 'gʻ': 'ғ', 'sh': 'ш', 'ch': 'ч', 'ng': 'нг',
             "o'": 'ў', "g'": 'ғ',
@@ -166,16 +172,18 @@ def uz_to_cyrillic(text: str) -> str:
         if found:
             continue
             
+        # 'ts' ni so'z boshida yoki mustaqil o'tkazish
         if current_part.startswith('ts'):
-             is_at_start_of_word = (i == 0 or not text[i-1].isalpha())
-             
-             if is_at_start_of_word:
-                 result.append('Ц' if is_upper else 'ц')
-                 i += 2
-                 continue
-             else:
-                 pass
+              is_at_start_of_word = (i == 0 or not text[i-1].isalpha())
+              
+              if is_at_start_of_word:
+                  result.append('Ц' if is_upper else 'ц')
+                  i += 2
+                  continue
+              else:
+                  pass
 
+        # 'Ya', 'Yo', 'Yu', 'Ye' kabi unlidan oldin keladigan 'Y' harflarini qayta ishlash
         if current_char_lower == 'y' and i + 1 < len(text) and text[i+1].lower() in ('a', 'o', 'u', 'e'):
             next_char = text[i+1].lower()
             
@@ -186,6 +194,7 @@ def uz_to_cyrillic(text: str) -> str:
             i += 2
             continue
             
+        # 'E' harfini so'z boshida 'Э' deb, qolgan joyda 'Е' deb o'tkazish
         if current_char_lower == 'e':
             is_start_of_word = (i == 0 or not text[i-1].isalpha())
             
@@ -196,6 +205,7 @@ def uz_to_cyrillic(text: str) -> str:
             i += 1
             continue
             
+        # Oddiy Lotin harflarini o'tkazish
         if current_char_lower in CYR_MAP:
             cyr = CYR_MAP[current_char_lower]
             result.append(cyr.upper() if is_upper else cyr)
@@ -206,6 +216,7 @@ def uz_to_cyrillic(text: str) -> str:
         
     final_text = "".join(result)
     
+    # Ba'zi keyingi tozalashlar (qayta-qayta uchraydigan noto'g'ri o'tishlar)
     final_text = final_text.replace("йа", "я").replace("йо", "ё").replace("йу", "ю").replace("йе", "е")
     final_text = final_text.replace("йер", "ер") 
     final_text = final_text.replace('ёъ', 'йў') 
@@ -244,7 +255,7 @@ def detect_script(text: str) -> str:
 # --- GEMINI IMMLO TEKSHIRISH FUNKSIYASI ---
 async def gemini_process_text(text: str, task_type: str) -> str:
     if gemini_client is None:
-        return "❌ Gemini API sozlanmagan. Imloni tekshirib bo'lmadi."
+        return "❌ Gemini API sozlanmagan yoki API kaliti bloklangan. Imloni tekshirib bo'lmadi."
     
     detected_script = detect_script(text)
     
@@ -254,12 +265,18 @@ async def gemini_process_text(text: str, task_type: str) -> str:
         target_script = "LOTIN O'ZBEK ALIFBOSIDAN"
         
     if task_type == 'spellcheck':
+        # >>> Bu yerda yangi ko'rsatma kiritildi <<<
         system_instruction = (
             "Siz professional O'zbek tili imlo va grammatika tekshiruvchisiz. "
             "Berilgan matnni tahlil qiling. Barcha imlo va tinish belgisi xatolarini to'g'rilang. "
             f"JAVOBINGIZDA MUTLAQO VA FAQAТ {target_script} FOYDALANING. "
-            "Faqat va faqat to'g'rilangan matnni qaytaring. Hech qanday qo'shimcha izoh yozmang."
+            
+            "To'g'rilangan matnni ikki qismda qaytaring. "
+            "1. Birinchi qatorda to'g'rilangan matnning o'zi bo'lsin. "
+            "2. Ikkinchi qatorda esa 'Tuzatishlar: [noto'g'ri so'z] ❌ → [to'g'ri so'z] ✅' formatida barcha o'zgarishlar ro'yxati (yoki asosiy o'zgarishlar) bo'lsin. "
+            "Agar matnda xato bo'lmasa, faqat to'g'rilangan matnni (birinchi qatorni) qaytaring. Qolgan izohlarni yozmang."
         )
+        # <<< Yangi ko'rsatma tugadi >>>
     else:
         return "Noma'lum vazifa turi."
         
@@ -269,7 +286,6 @@ async def gemini_process_text(text: str, task_type: str) -> str:
             temperature=0.0,
         )
         
-        # <<< ASOSIY TUZATISH: generate_content sinxron funksiyasini asyncio.to_thread orqali chaqirish >>>
         response = await asyncio.to_thread(
             gemini_client.models.generate_content, 
             model=GEMINI_MODEL,
@@ -291,6 +307,9 @@ async def gemini_process_text(text: str, task_type: str) -> str:
         
     except APIError as e: 
         logger.error(f"Gemini API xatosi (Ulanish): {e}")
+        # Kalit bloklangani haqida xabar qo'shdik
+        if 'PERMISSION_DENIED' in str(e) and 'leaked' in str(e):
+             return "❌ Gemini API kaliti bloklangan (leaked/sizib chiqqan). Iltimos, yangi kalit yarating va uni faqat Railway Variables'ga joylashtiring."
         return f"❌ Gemini API xatosi. Iltimos, server ulanishini yoki API kalitini tekshiring. Xato: {html_decoration.quote(str(e))}"
         
     except Exception as e:
@@ -300,17 +319,17 @@ async def gemini_process_text(text: str, task_type: str) -> str:
 # --- Fayl konvertatsiya mantig'i ---
 async def convert_office_file_from_bytes(file_bytes: io.BytesIO, filename: str) -> Union[Tuple[io.BytesIO, str], str]:
     if not (Document and load_workbook and Presentation):
-         return "❌ Office fayllar bilan ishlash kutubxonalari o'rnatilmagan."
-         
+          return "❌ Office fayllar bilan ishlash kutubxonalari o'rnatilmagan."
+          
     ext = filename.lower().split('.')[-1]
     file_bytes.seek(0)
     
     if 'kirill' in filename.lower():
-          new_filename = filename.replace('kirill', 'lotin')
+           new_filename = filename.replace('kirill', 'lotin')
     elif 'lotin' in filename.lower():
-          new_filename = filename.replace('lotin', 'kirill')
+           new_filename = filename.replace('lotin', 'kirill')
     else:
-          new_filename = f"converted_{filename}"
+           new_filename = f"converted_{filename}"
 
     try:
         if ext == 'docx':
@@ -318,8 +337,8 @@ async def convert_office_file_from_bytes(file_bytes: io.BytesIO, filename: str) 
             paragraphs = list(doc.paragraphs)
             for table in doc.tables:
                  for row in table.rows:
-                     for cell in row.cells:
-                         paragraphs.extend(cell.paragraphs)
+                      for cell in row.cells:
+                          paragraphs.extend(cell.paragraphs)
             
             sample = "\n".join(p.text for p in paragraphs if p.text)
             script = detect_script(sample)
@@ -395,9 +414,9 @@ async def convert_office_file_from_bytes(file_bytes: io.BytesIO, filename: str) 
             prs.save(out)
             out.seek(0)
             return out, new_filename
-        
+            
         else:
-             return f"Bot faqat **.docx, .xlsx, .pptx** formatlarini qo'llab-quvvatlaydi."
+              return f"Bot faqat **.docx, .xlsx, .pptx** formatlarini qo'llab-quvvatlaydi."
     
     except Exception as e:
         logger.exception(f"Office conversion failed for .{ext}")
@@ -441,7 +460,7 @@ async def process_file_logic(msg: types.Message, state: FSMContext, expected_ext
     except Exception as e:
         logger.exception(f"process_file_logic failed during download/send: {e}")
         await msg.answer(f"❌ Yuklab olish yoki yuborishda umumiy xatolik. Iltimos, yana urinib ko'ring.",
-                         reply_markup=MAIN_MENU, parse_mode=ParseMode.MARKDOWN)
+                             reply_markup=MAIN_MENU, parse_mode=ParseMode.MARKDOWN)
     finally:
         await state.clear()
 
@@ -465,7 +484,7 @@ async def auto_translit_entry(msg: types.Message, state: FSMContext):
 @router.message(F.text == "✏️ Imlo Tekshirish (Gemini)")
 async def spellcheck_entry(msg: types.Message, state: FSMContext):
     if gemini_client is None:
-        await msg.answer("❌ Gemini API sozlanmaganligi sababli Imlo tekshirish funksiyasi ishlamaydi.", reply_markup=MAIN_MENU)
+        await msg.answer("❌ Gemini API sozlanmaganligi sababli Imlo tekshirish funksiyasi ishlamaydi (API kalitini tekshiring).", reply_markup=MAIN_MENU)
         return
         
     await state.set_state(TranslitState.waiting_for_spellcheck)
@@ -476,9 +495,9 @@ async def spellcheck_entry(msg: types.Message, state: FSMContext):
 @router.message(F.text == "📁 Fayl Konvertatsiyasi")
 async def file_translit_entry(msg: types.Message, state: FSMContext):
     if not (Document and load_workbook and Presentation):
-         await msg.answer("❌ Fayl kutubxonalari o'rnatilmagan. Fayl konvertatsiyasi ISHLAMAYDI.", reply_markup=MAIN_MENU)
-         return
-         
+           await msg.answer("❌ Fayl kutubxonalari o'rnatilmagan. Fayl konvertatsiyasi ISHLAMAYDI.", reply_markup=MAIN_MENU)
+           return
+           
     await state.set_state(TranslitState.waiting_for_menu)
     await msg.answer(f"Konvertatsiya turini tanlang. (Maksimal fayl hajmi: {MAX_FILE_SIZE_MB} MB)", reply_markup=FILE_MENU)
 
@@ -609,12 +628,12 @@ async def inline_translit_handler(inline_query: InlineQuery):
         if not text_to_convert:
             results.append(
                  InlineQueryResultArticle(
-                    id="enter_text",
-                    title="Matnni kiriting...",
-                    input_message_content=InputTextMessageContent(
-                        message_text="Matn kiritilmadi. Lotin yoki Kirill matnini yozing."
-                    )
-                )
+                     id="enter_text",
+                     title="Matnni kiriting...",
+                     input_message_content=InputTextMessageContent(
+                         message_text="Matn kiritilmadi. Lotin yoki Kirill matnini yozing."
+                     )
+                 )
             )
         elif command == "lotin":
             converted_text = uz_to_latin(text_to_convert)
@@ -670,14 +689,14 @@ async def inline_translit_handler(inline_query: InlineQuery):
                 )
             else:
                  results.append(
-                    InlineQueryResultArticle(
-                        id="unknown_auto",
-                        title="Alifbo aniqlanmadi (Kirill yoki Lotin deb yozing)",
-                        input_message_content=InputTextMessageContent(
-                            message_text=f"Alifbo aniqlanmadi: {query_text}"
-                        )
-                    )
-                )
+                     InlineQueryResultArticle(
+                         id="unknown_auto",
+                         title="Alifbo aniqlanmadi (Kirill yoki Lotin deb yozing)",
+                         input_message_content=InputTextMessageContent(
+                             message_text=f"Alifbo aniqlanmadi: {query_text}"
+                         )
+                     )
+                 )
                 
     await bot.answer_inline_query(inline_query.id, results, cache_time=5)
 
@@ -692,8 +711,6 @@ async def main():
     if not gemini_client:
         logger.error("!!! GEMINI CLIENT ISHLAMAYAPTI. IMLO TEKSHIRISH FUNKSIYASI O'CHIRILGAN !!!")
     
-    # Inline rejimni aktivlashtirish (BotFather orqali ham aktivlashtirish kerak!)
-    # BotFather'da /setinline buyrug'ini bosing.
     logger.info("Inline rejim tayyor. @lotinifybot [lotin/kirill] matn ko'rinishida foydalanish mumkin.")
 
     await dp.start_polling(bot)
