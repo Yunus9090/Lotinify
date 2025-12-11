@@ -1,4 +1,4 @@
-﻿# bot.py - Lotinify Telegram Boti (YAKUNIY BARQAROR VA INLINE VERSIYA)
+﻿# bot.py - Lotinify Telegram Boti (FINAL BARQAROR VA XATOSIZ VERSIYA)
 
 import asyncio
 import logging
@@ -138,7 +138,7 @@ def uz_to_cyrillic(text: str) -> str:
         'a': 'а', 'b': 'б', 'v': 'в', 'g': 'г', 'd': 'д', 'z': 'з', 'i': 'и', 'y': 'й', 'k': 'к', 'l': 'л',
         'm': 'м', 'n': 'н', 'o': 'о', 'p': 'п', 'r': 'р', 's': 'с', 't': 'т', 'u': 'у', 'f': 'ф',
         'x': 'х', 'h': 'ҳ', 'q': 'қ', 'j': 'ж', 
-        "'": 'ъ' # Apostrofni 'ъ' ga o'tkazish (Kirillcha xato shu yerda to'g'irlandi)
+        "'": 'ъ' # Apostrofni 'ъ' ga o'tkazish
     }
 
     while i < len(text):
@@ -205,7 +205,7 @@ def uz_to_cyrillic(text: str) -> str:
             i += 1
             continue
             
-        # Oddiy Lotin harflarini o'tkazish
+        # Oddiy Lotin harflarini o'tkazish (Bu yerda 's' ni 'с' ga o'tishi tekshirildi va to'g'ri)
         if current_char_lower in CYR_MAP:
             cyr = CYR_MAP[current_char_lower]
             result.append(cyr.upper() if is_upper else cyr)
@@ -265,7 +265,6 @@ async def gemini_process_text(text: str, task_type: str) -> str:
         target_script = "LOTIN O'ZBEK ALIFBOSIDAN"
         
     if task_type == 'spellcheck':
-        # >>> Bu yerda yangi ko'rsatma kiritildi <<<
         system_instruction = (
             "Siz professional O'zbek tili imlo va grammatika tekshiruvchisiz. "
             "Berilgan matnni tahlil qiling. Barcha imlo va tinish belgisi xatolarini to'g'rilang. "
@@ -276,7 +275,6 @@ async def gemini_process_text(text: str, task_type: str) -> str:
             "2. Ikkinchi qatorda esa 'Tuzatishlar: [noto'g'ri so'z] ❌ → [to'g'ri so'z] ✅' formatida barcha o'zgarishlar ro'yxati (yoki asosiy o'zgarishlar) bo'lsin. "
             "Agar matnda xato bo'lmasa, faqat to'g'rilangan matnni (birinchi qatorni) qaytaring. Qolgan izohlarni yozmang."
         )
-        # <<< Yangi ko'rsatma tugadi >>>
     else:
         return "Noma'lum vazifa turi."
         
