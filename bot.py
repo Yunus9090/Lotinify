@@ -1,4 +1,4 @@
-﻿# bot.py - Lotinify Telegram Boti (FINAL BARQAROR VA XATOSIZ VERSIYA)
+﻿# bot.py - Lotinify Telegram Boti (TRANSFORMER VERSION)
 
 import asyncio
 import logging
@@ -48,7 +48,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # !!! BOT TOKENI VA API KALITLARI TIZIM O'ZGARUVCHISIDAN O'QILADI (XAVFSIZLIK UCHUN) !!!
-TOKEN = "8420487214:AAFgPefTZNiF843hOZjYb_-3J_6V6SuYzmY"  # Bot tokeni
+TOKEN = "8420487214:AAFgPefTZNiF843hOZjYb_-3J_6V6SuZzmY"  # Bot tokeni
 ADMIN_ID = 1455902088 
 # API kalitini tizim o'zgaruvchisidan (Railway Variables) o'qish:
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
@@ -127,88 +127,80 @@ def uz_to_latin(text: str) -> str:
     
     return re.sub(r'(^|\s|[^a-zA-Z])([Е])', fix_initial_ye, text)
 
-# --- 2. LOTINDAN KIRILLGA ---
+# --- 2. LOTINDAN KIRILLGA (XATO S harfini to'g'irlash uchun eng soddalashtirilgan versiya) ---
+LAT_TO_CYR_MAP = {
+    'sh': 'ш', 'ch': 'ч', 'oʻ': 'ў', 'gʻ': 'ғ', 'ng': 'нг', 'ts': 'ц',
+    "o'": 'ў', "g'": 'ғ', "sh": 'ш', "ch": 'ч',
+    'a': 'а', 'b': 'б', 'v': 'в', 'g': 'г', 'd': 'д', 'z': 'з', 'i': 'и', 
+    'k': 'к', 'l': 'л', 'm': 'м', 'n': 'н', 'o': 'о', 'p': 'п', 
+    'r': 'р', 's': 'с', 't': 'т', 'u': 'у', 'f': 'ф',
+    'x': 'х', 'h': 'ҳ', 'q': 'қ', 'j': 'ж', 
+    "'": 'ъ' 
+}
+
 def uz_to_cyrillic(text: str) -> str:
     text = normalize_apostrophes(text)
     result = []
     i = 0
     
-    # Lotin harflarining oddiy Kirillcha ekvivalentlari
-    CYR_MAP = {
-        'a': 'а', 'b': 'б', 'v': 'в', 'g': 'г', 'd': 'д', 'z': 'з', 'i': 'и', 'y': 'й', 'k': 'к', 'l': 'л',
-        'm': 'м', 'n': 'н', 'o': 'о', 'p': 'п', 'r': 'р', 's': 'с', 't': 'т', 'u': 'у', 'f': 'ф',
-        'x': 'х', 'h': 'ҳ', 'q': 'қ', 'j': 'ж', 
-        "'": 'ъ' # Apostrofni 'ъ' ga o'tkazish
-    }
-
     while i < len(text):
+        found = False
         char = text[i]
         
-        is_upper = char.isupper()
-        current_part = text[i:].lower() 
-        current_char_lower = char.lower()
-
-        found = False
+        # Qo'shma harflar (uzunroq kalitlar) uchun
+        compound_keys = ['sh', 'ch', 'oʻ', 'gʻ', 'ng', 'ts', "o'", "g'"]
         
-        # Qo'shma harflarni o'tkazish
-        compound_map = {
-            'oʻ': 'ў', 'gʻ': 'ғ', 'sh': 'ш', 'ch': 'ч', 'ng': 'нг',
-            "o'": 'ў', "g'": 'ғ',
-        }
-
-        for lat, cyr in sorted(compound_map.items(), key=lambda item: len(item[0]), reverse=True):
-            if current_part.startswith(lat):
-                if is_upper and len(lat) > 1 and lat.islower():
-                     result.append(cyr.upper())
-                elif char.isupper() and len(lat) == 2 and text[i+1].islower():
-                     result.append(cyr.capitalize())
+        for lat in compound_keys:
+            if text[i:i+len(lat)].lower() == lat:
+                cyr = LAT_TO_CYR_MAP[lat]
+                
+                # Bosh harflarni aniqlash
+                if text[i].isupper() and len(lat) > 1 and i + 1 < len(text) and text[i+1].islower():
+                    result.append(cyr.capitalize())
+                elif text[i].isupper():
+                    result.append(cyr.upper())
                 else:
-                     result.append(cyr.upper() if is_upper else cyr)
-
+                    result.append(cyr)
+                    
                 i += len(lat)
                 found = True
                 break
-        
+
         if found:
             continue
+        
+        char_lower = char.lower()
+        
+        # y, ya, yo, yu, ye uchun maxsus qoidalar
+        if char_lower == 'y' and i + 1 < len(text) and text[i+1].lower() in ('a', 'o', 'u', 'e'):
+            next_char_lower = text[i+1].lower()
+            y_vowel_map = {'a': 'я', 'o': 'ё', 'u': 'ю', 'e': 'е'}
+            cyr = y_vowel_map[next_char_lower]
             
-        # 'ts' ni so'z boshida yoki mustaqil o'tkazish
-        if current_part.startswith('ts'):
-              is_at_start_of_word = (i == 0 or not text[i-1].isalpha())
-              
-              if is_at_start_of_word:
-                  result.append('Ц' if is_upper else 'ц')
-                  i += 2
-                  continue
-              else:
-                  pass
-
-        # 'Ya', 'Yo', 'Yu', 'Ye' kabi unlidan oldin keladigan 'Y' harflarini qayta ishlash
-        if current_char_lower == 'y' and i + 1 < len(text) and text[i+1].lower() in ('a', 'o', 'u', 'e'):
-            next_char = text[i+1].lower()
-            
-            cyr_map_y_vowel = {'a': 'я', 'o': 'ё', 'u': 'ю', 'e': 'е'}
-            cyr = cyr_map_y_vowel[next_char]
-            
-            result.append(cyr.upper() if is_upper else cyr)
+            result.append(cyr.upper() if char.isupper() else cyr)
             i += 2
             continue
             
-        # 'E' harfini so'z boshida 'Э' deb, qolgan joyda 'Е' deb o'tkazish
-        if current_char_lower == 'e':
-            is_start_of_word = (i == 0 or not text[i-1].isalpha())
-            
-            if is_start_of_word:
-                result.append('Э' if is_upper else 'э')
-            else:
-                result.append('Е' if is_upper else 'е') 
+        if char_lower == 'y':
+            # Faqat 'y' so'zning boshida kelsa (Yolg'iz) yoki unlidan oldin kelmasa 'й' ga o'tadi
+            cyr = 'й'
+            result.append(cyr.upper() if char.isupper() else cyr)
             i += 1
             continue
             
-        # Oddiy Lotin harflarini o'tkazish (Bu yerda 's' ni 'с' ga o'tishi tekshirildi va to'g'ri)
-        if current_char_lower in CYR_MAP:
-            cyr = CYR_MAP[current_char_lower]
-            result.append(cyr.upper() if is_upper else cyr)
+        # e harfini so'z boshida 'Э', qolgan joyda 'Е' deb o'tkazish
+        if char_lower == 'e':
+            is_start_of_word = (i == 0 or not text[i-1].isalpha())
+            cyr = 'Э' if is_start_of_word else 'Е'
+            
+            result.append(cyr.upper() if char.isupper() else cyr.lower())
+            i += 1
+            continue
+
+        # Oddiy harflar
+        if char_lower in LAT_TO_CYR_MAP:
+            cyr = LAT_TO_CYR_MAP[char_lower]
+            result.append(cyr.upper() if char.isupper() else cyr)
         else:
             result.append(char)
         
@@ -216,14 +208,9 @@ def uz_to_cyrillic(text: str) -> str:
         
     final_text = "".join(result)
     
-    # Ba'zi keyingi tozalashlar (qayta-qayta uchraydigan noto'g'ri o'tishlar)
-    final_text = final_text.replace("йа", "я").replace("йо", "ё").replace("йу", "ю").replace("йе", "е")
-    final_text = final_text.replace("йер", "ер") 
-    final_text = final_text.replace('ёъ', 'йў') 
-    
     return final_text
 
-# --- Skriptni aniqlash funksiyasi ---
+# --- Skriptni aniqlash funksiyasi (O'zgarishsiz) ---
 def detect_script(text: str) -> str:
     cyr_count = 0
     lat_count = 0
@@ -249,13 +236,16 @@ def detect_script(text: str) -> str:
         return 'unknown'
         
 # ==========================================================
-# Handlers va Fayl Mantiqi
+# Handlers va Fayl Mantiqi (O'zgarishsiz)
 # ==========================================================
+# (davomi yuqoridagi kodga o'xshash)
 
 # --- GEMINI IMMLO TEKSHIRISH FUNKSIYASI ---
 async def gemini_process_text(text: str, task_type: str) -> str:
     if gemini_client is None:
-        return "❌ Gemini API sozlanmagan yoki API kaliti bloklangan. Imloni tekshirib bo'lmadi."
+        if GEMINI_API_KEY:
+             return "❌ Gemini API kaliti bloklangan. Iltimos, yangi kalit yarating va uni faqat Railway Variables'ga joylashtiring."
+        return "❌ Gemini API sozlanmagan. Imloni tekshirib bo'lmadi."
     
     detected_script = detect_script(text)
     
@@ -305,7 +295,6 @@ async def gemini_process_text(text: str, task_type: str) -> str:
         
     except APIError as e: 
         logger.error(f"Gemini API xatosi (Ulanish): {e}")
-        # Kalit bloklangani haqida xabar qo'shdik
         if 'PERMISSION_DENIED' in str(e) and 'leaked' in str(e):
              return "❌ Gemini API kaliti bloklangan (leaked/sizib chiqqan). Iltimos, yangi kalit yarating va uni faqat Railway Variables'ga joylashtiring."
         return f"❌ Gemini API xatosi. Iltimos, server ulanishini yoki API kalitini tekshiring. Xato: {html_decoration.quote(str(e))}"
@@ -402,7 +391,7 @@ async def convert_office_file_from_bytes(file_bytes: io.BytesIO, filename: str) 
             converter_func = uz_to_latin if script == 'cyrillic' else uz_to_cyrillic
 
             for slide in prs.slides:
-                for shape in slide.shapes:
+                for shape in prs.slides:
                     if not shape.has_text_frame: continue
                     for paragraph in shape.text_frame.paragraphs:
                         if paragraph.text and paragraph.text.strip():
@@ -482,7 +471,10 @@ async def auto_translit_entry(msg: types.Message, state: FSMContext):
 @router.message(F.text == "✏️ Imlo Tekshirish (Gemini)")
 async def spellcheck_entry(msg: types.Message, state: FSMContext):
     if gemini_client is None:
-        await msg.answer("❌ Gemini API sozlanmaganligi sababli Imlo tekshirish funksiyasi ishlamaydi (API kalitini tekshiring).", reply_markup=MAIN_MENU)
+        if GEMINI_API_KEY:
+            await msg.answer("❌ Gemini API kaliti bloklangan. Iltimos, yangi kalit yarating va uni faqat Railway Variables'ga joylashtiring.", reply_markup=MAIN_MENU)
+        else:
+            await msg.answer("❌ Gemini API sozlanmaganligi sababli Imlo tekshirish funksiyasi ishlamaydi (API kalitini tekshiring).", reply_markup=MAIN_MENU)
         return
         
     await state.set_state(TranslitState.waiting_for_spellcheck)
